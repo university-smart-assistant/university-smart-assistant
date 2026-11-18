@@ -13,17 +13,58 @@ app.get("/", (req, res) => {
     res.send("University Smart Assistant AI ishlayapti!");
 });
 
+const sleep = ms =>
+    new Promise(resolve => setTimeout(resolve, ms));
+
+async function generateAnswer(ai, model, prompt) {
+    let lastError;
+
+    for (let attempt = 1; attempt <= 2; attempt++) {
+        try {
+            console.log(
+                `Model: ${model}, urinish: ${attempt}`
+            );
+
+            const result = await ai.models.generateContent({
+                model,
+                contents: prompt
+            });
+
+            if (!result.text) {
+                throw new Error("AI javob qaytarmadi.");
+            }
+
+            return result.text;
+
+        } catch (error) {
+            lastError = error;
+
+            console.error(
+                `${model} xatosi:`,
+                error.message
+            );
+
+            if (attempt < 2) {
+                await sleep(2000);
+            }
+        }
+    }
+
+    throw lastError;
+}
+
 async function startServer() {
     const { GoogleGenAI } = await import("@google/genai");
 
     const apiKey = process.env.GEMINI_API_KEY;
 
     if (!apiKey) {
-        console.error("GEMINI_API_KEY topilmadi!");
-        process.exit(1);
+        throw new Error("GEMINI_API_KEY topilmadi!");
     }
 
-    const ai = new GoogleGenAI({ apiKey });
+    const ai = new GoogleGenAI({
+        apiKey: apiKey
+    });
 
     app.post("/ask", async (req, res) => {
         try {
@@ -31,15 +72,21 @@ async function startServer() {
             const documents = req.body.documents || [];
             const history = req.body.history || [];
 
-            if (!question || !question.trim()) {
+            if (
+                typeof question !== "string" ||
+                !question.trim()
+            ) {
                 return res.status(400).json({
                     error: "Iltimos, savol kiriting."
                 });
             }
 
-            if (!Array.isArray(documents) || !Array.isArray(history)) {
+            if (
+                !Array.isArray(documents) ||
+                !Array.isArray(history)
+            ) {
                 return res.status(400).json({
-                    error: "Yuborilgan ma'lumot formati noto‘g‘ri."
+                    error: "Ma'lumot formati noto‘g‘ri."
                 });
             }
 
@@ -53,62 +100,98 @@ async function startServer() {
             const historyText = history
                 .slice(-12)
                 .map(item => {
-                    const role = item.role === "model" ? "AI" : "Foydalanuvchi";
+                    const role =
+                        item.role === "model"
+                            ? "AI"
+                            : "Foydalanuvchi";
+
                     return `${role}: ${item.text || ""}`;
                 })
                 .join("\n");
 
             const prompt = `
-Siz University Smart Assistant nomli aqlli universitet yordamchisisiz.
+Siz University Smart Assistant nomli
+aqlli universitet yordamchisisiz.
 
-VAZIFALARINGIZ:
-1. Foydalanuvchining salomlashishiga samimiy javob bering.
-2. Umumiy savollarga tushunarli va foydali javob bering.
-3. Universitet haqidagi savollarga mavjud hujjatlar asosida javob bering.
-4. Hujjatlarda javob bo‘lmasa, buni ochiq ayting.
-5. O‘zbek tilida sodda va tushunarli yozing.
-6. Savolga bevosita javob bering.
+SIZNING VAZIFALARINGIZ:
+
+1. Barcha savollarga yordam berish.
+2. Salomlashishga samimiy javob berish.
+3. Umumiy bilim, fanlar, ingliz tili,
+   matematika, informatika va dasturlash
+   savollariga javob berish.
+4. Universitet haqidagi savollarga ham
+   hujjatlar bo‘lmasa javob berishga harakat qilish.
+5. Avval universitet hujjatlaridan ma'lumot qidiring.
+6. Hujjatda javob bo‘lmasa, umumiy bilimlaringiz
+   asosida tushuntirish bering.
+7. Jizzakh Sambhram University haqida
+   foydalanuvchiga yordam bering.
+8. Kontrakt summasi, stipendiya miqdori,
+   imtihon sanasi va rasmiy qoidalarni
+   bilmasangiz, ularni o‘ylab topmang.
+9. Noma'lum ma'lumotni aniq fakt sifatida ko‘rsatmang.
+10. O‘zbek tilida sodda, batafsil va tushunarli yozing.
 
 UNIVERSITET HUJJATLARI:
-${documentText || "Hozircha universitet hujjatlari kiritilmagan."}
+${documentText || "Hozircha hujjatlar yuklanmagan. Umumiy bilimlaringiz asosida javob bering."}
 
 OLDINGI SUHBAT:
 ${historyText || "Suhbat yangi boshlandi."}
 
-FOYDALANUVCHINING HOZIRGI SAVOLI:
+FOYDALANUVCHINING SAVOLI:
 ${question}
 `;
 
-            const result = await ai.models.generateContent({
-                model: "gemini-3.8-flash",
-                contents: prompt
-            });
+            let answer;
 
-            const answer = result.text;
+            try {
+                answer = await generateAnswer(
+                    ai,
+                    "gemini-3.8-flash",
+                    prompt
+                );
 
-            if (!answer) {
-                return res.json({
-                    answer: "Hozircha javob topilmadi. Qayta urinib ko‘ring."
-                });
+            } catch (error) {
+                console.log(
+                    "Birinchi model ishlamadi. Ikkinchi model tekshiriladi."
+                );
+
+                answer = await generateAnswer(
+                    ai,
+                    "gemini-3.6-flash",
+                    prompt
+                );
             }
 
-            res.json({ answer });
+            return res.json({
+                answer: answer
+            });
 
         } catch (error) {
-            console.error("Gemini xatosi:", error);
+            console.error(
+                "Yakuniy AI xatosi:",
+                error
+            );
 
-            res.status(500).json({
-                error: "AI javob berishda xatolik yuz berdi."
+            return res.status(503).json({
+                error: "AI vaqtincha javob bera olmayapti. Iltimos, qayta urinib ko‘ring."
             });
         }
     });
 
     app.listen(PORT, () => {
-        console.log(`Server ${PORT} portda ishga tushdi.`);
+        console.log(
+            `Server ${PORT} portda ishga tushdi.`
+        );
     });
 }
 
 startServer().catch(error => {
-    console.error("Serverni ishga tushirishda xatolik:", error);
+    console.error(
+        "Serverni ishga tushirish xatosi:",
+        error
+    );
+
     process.exit(1);
 });
