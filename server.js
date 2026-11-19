@@ -22,11 +22,11 @@ async function generateAnswer(ai, model, prompt) {
     for (let attempt = 1; attempt <= 2; attempt++) {
         try {
             console.log(
-                `Model: ${model}, urinish: ${attempt}`
+                `AI modeli: ${model}, urinish: ${attempt}`
             );
 
             const result = await ai.models.generateContent({
-                model,
+                model: model,
                 contents: prompt
             });
 
@@ -34,13 +34,15 @@ async function generateAnswer(ai, model, prompt) {
                 throw new Error("AI javob qaytarmadi.");
             }
 
+            console.log(`Muvaffaqiyatli javob: ${model}`);
+
             return result.text;
 
         } catch (error) {
             lastError = error;
 
             console.error(
-                `${model} xatosi:`,
+                `Model ${model} xatosi:`,
                 error.message
             );
 
@@ -113,25 +115,23 @@ async function startServer() {
 Siz University Smart Assistant nomli
 aqlli universitet yordamchisisiz.
 
-SIZNING VAZIFALARINGIZ:
+ASOSIY VAZIFALARINGIZ:
 
 1. Barcha savollarga yordam berish.
 2. Salomlashishga samimiy javob berish.
-3. Umumiy bilim, fanlar, ingliz tili,
-   matematika, informatika va dasturlash
-   savollariga javob berish.
-4. Universitet haqidagi savollarga ham
-   hujjatlar bo‘lmasa javob berishga harakat qilish.
+3. Ingliz tili, matematika, informatika,
+   dasturlash va boshqa fanlardan yordam berish.
+4. Universitet haqidagi savollarga javob berish.
 5. Avval universitet hujjatlaridan ma'lumot qidiring.
-6. Hujjatda javob bo‘lmasa, umumiy bilimlaringiz
-   asosida tushuntirish bering.
-7. Jizzakh Sambhram University haqida
-   foydalanuvchiga yordam bering.
-8. Kontrakt summasi, stipendiya miqdori,
-   imtihon sanasi va rasmiy qoidalarni
-   bilmasangiz, ularni o‘ylab topmang.
-9. Noma'lum ma'lumotni aniq fakt sifatida ko‘rsatmang.
-10. O‘zbek tilida sodda, batafsil va tushunarli yozing.
+6. Hujjatda javob bo'lmasa, umumiy bilimlaringiz
+   asosida tushunarli javob bering.
+7. Hujjatlar bo'lmasa ham savollarga javob bering.
+8. Jizzakh Sambhram University haqida yordam bering.
+9. Kontrakt summasi, stipendiya miqdori,
+   imtihon sanalari va rasmiy qoidalarni
+   bilmasangiz, ularni o'ylab topmang.
+10. Noma'lum ma'lumotni aniq fakt sifatida ko'rsatmang.
+11. O'zbek tilida sodda va batafsil yozing.
 
 UNIVERSITET HUJJATLARI:
 ${documentText || "Hozircha hujjatlar yuklanmagan. Umumiy bilimlaringiz asosida javob bering."}
@@ -152,9 +152,9 @@ ${question}
                     prompt
                 );
 
-            } catch (error) {
+            } catch (firstError) {
                 console.log(
-                    "Birinchi model ishlamadi. Ikkinchi model tekshiriladi."
+                    "Birinchi model javob bermadi. Zaxira model sinab ko‘riladi."
                 );
 
                 answer = await generateAnswer(
@@ -170,27 +170,27 @@ ${question}
 
         } catch (error) {
             console.error(
-                "Yakuniy AI xatosi:",
-                error
+                "YAKUNIY AI XATOSI:",
+                error.message
             );
 
             return res.status(503).json({
-                error: "AI vaqtincha javob bera olmayapti. Iltimos, qayta urinib ko‘ring."
+                error: "AI vaqtincha javob bera olmayapti. Iltimos, birozdan keyin qayta urinib ko‘ring."
             });
         }
     });
 
     app.listen(PORT, () => {
         console.log(
-            `Server ${PORT} portda ishga tushdi.`
+            `University Smart Assistant serveri ${PORT} portda ishlayapti.`
         );
     });
 }
 
 startServer().catch(error => {
     console.error(
-        "Serverni ishga tushirish xatosi:",
-        error
+        "SERVER ISHGA TUSHISH XATOSI:",
+        error.message
     );
 
     process.exit(1);
